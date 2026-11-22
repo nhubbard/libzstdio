@@ -14,6 +14,8 @@ typedef int (*close_fn)(int);
 typedef off_t (*lseek_fn)(int, off_t, int);
 typedef off64_t (*lseek64_fn)(int, off64_t, int);
 typedef int (*fflush_fn)(FILE *);
+typedef int (*dup_fn)(int);
+typedef int (*dup2_fn)(int, int);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
@@ -21,6 +23,8 @@ static _Atomic(void *) close_symbol;
 static _Atomic(void *) lseek_symbol;
 static _Atomic(void *) lseek64_symbol;
 static _Atomic(void *) fflush_symbol;
+static _Atomic(void *) dup_symbol;
+static _Atomic(void *) dup2_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -124,4 +128,24 @@ int fflush(FILE *stream) {
     return EOF;
   }
   return next(stream);
+}
+
+int dup(int oldfd) {
+  __extension__ const dup_fn next =
+      (dup_fn)zstdio_resolve_next(&dup_symbol, "dup");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(oldfd);
+}
+
+int dup2(int oldfd, int newfd) {
+  __extension__ const dup2_fn next =
+      (dup2_fn)zstdio_resolve_next(&dup2_symbol, "dup2");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(oldfd, newfd);
 }

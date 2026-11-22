@@ -1,9 +1,64 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+static int check_duplication(int fd) {
+  int status = EXIT_FAILURE;
+  const int duplicate = dup(fd);
+  if (duplicate < 0) {
+    perror("dup");
+    return EXIT_FAILURE;
+  }
+
+  const int target = open("/dev/null", O_RDONLY | O_CLOEXEC);
+  if (target < 0) {
+    perror("open /dev/null");
+    (void)close(duplicate);
+    return EXIT_FAILURE;
+  }
+
+  if (lseek(duplicate, 19, SEEK_SET) != 19 || lseek(fd, 0, SEEK_CUR) != 19) {
+    fputs("dup: expected a shared offset\n", stderr);
+    goto cleanup;
+  }
+
+  if (dup2(-1, target) != -1 || errno != EBADF ||
+      fcntl(target, F_GETFD) != FD_CLOEXEC) {
+    fputs("dup2: expected an invalid source to leave the target open\n",
+          stderr);
+    goto cleanup;
+  }
+
+  if (dup2(target, target) != target || fcntl(target, F_GETFD) != FD_CLOEXEC) {
+    fputs("dup2: expected a same-descriptor call to preserve flags\n", stderr);
+    goto cleanup;
+  }
+
+  if (dup2(fd, target) != target || fcntl(target, F_GETFD) != 0 ||
+      lseek(target, 23, SEEK_SET) != 23 ||
+      lseek(duplicate, 0, SEEK_CUR) != 23) {
+    fputs("dup2: expected replacement, cleared CLOEXEC, and a shared offset\n",
+          stderr);
+    goto cleanup;
+  }
+
+  status = EXIT_SUCCESS;
+
+cleanup:
+  if (close(target) != 0) {
+    perror("close target");
+    status = EXIT_FAILURE;
+  }
+  if (close(duplicate) != 0) {
+    perror("close duplicate");
+    status = EXIT_FAILURE;
+  }
+  return status;
+}
 
 int main(void) {
   char path[] = "zstdio-seek-XXXXXX";
@@ -47,7 +102,7 @@ int main(void) {
     goto cleanup;
   }
 
-  status = EXIT_SUCCESS;
+  status = check_duplication(fd);
 
 cleanup:
   if (close(fd) != 0) {
