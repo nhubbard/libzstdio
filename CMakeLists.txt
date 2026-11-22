@@ -67,7 +67,8 @@ target_link_libraries(zstdio PRIVATE
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBZSTD REQUIRED IMPORTED_TARGET libzstd)
 
-add_library(zstdio_codec STATIC src/codec.c)
+add_library(zstdio_codec STATIC src/codec.c src/decoded_fd.c)
+target_compile_definitions(zstdio_codec PRIVATE _GNU_SOURCE)
 target_include_directories(zstdio_codec PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(zstdio_codec PRIVATE PkgConfig::LIBZSTD)
 
