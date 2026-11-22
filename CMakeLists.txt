@@ -64,6 +64,13 @@ target_link_libraries(zstdio PRIVATE
 	${CMAKE_DL_LIBS}
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBZSTD REQUIRED IMPORTED_TARGET libzstd)
+
+add_library(zstdio_codec STATIC src/codec.c)
+target_include_directories(zstdio_codec PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(zstdio_codec PRIVATE PkgConfig::LIBZSTD)
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -133,6 +140,10 @@ if(BUILD_TESTING)
 			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
 			$<TARGET_FILE:zstdio_mapping_probe>
 	)
+
+	add_executable(zstdio_codec_probe tests/codec_probe.c)
+	target_link_libraries(zstdio_codec_probe PRIVATE zstdio_codec)
+	add_test(NAME codec_roundtrip COMMAND zstdio_codec_probe)
 endif()
 
 option(
