@@ -15,6 +15,7 @@ add_library(zstdio SHARED
 	src/interpose.c
     src/descriptor_io.c
     src/stdio_io.c
+    src/mapping_io.c
 )
 
 set_target_properties(zstdio PROPERTIES
@@ -109,6 +110,16 @@ if(BUILD_TESTING)
 			${CMAKE_COMMAND} -E env
 			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
 			$<TARGET_FILE:zstdio_seek_probe>
+	)
+
+    add_executable(zstdio_mapping_probe tests/mapping_probe.c)
+	add_test(NAME mapping_native COMMAND zstdio_mapping_probe)
+	add_test(
+		NAME mapping_preload
+		COMMAND
+			${CMAKE_COMMAND} -E env
+			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
+			$<TARGET_FILE:zstdio_mapping_probe>
 	)
 endif()
 
