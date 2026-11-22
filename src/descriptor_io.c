@@ -19,6 +19,8 @@ typedef int (*dup2_fn)(int, int);
 typedef int (*ftruncate_fn)(int, off_t);
 typedef int (*ftruncate64_fn)(int, off64_t);
 typedef int (*sync_fd_fn)(int);
+typedef ssize_t (*pread_fn)(int, void *, size_t, off_t);
+typedef ssize_t (*pread64_fn)(int, void *, size_t, off64_t);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
@@ -32,6 +34,8 @@ static _Atomic(void *) ftruncate_symbol;
 static _Atomic(void *) ftruncate64_symbol;
 static _Atomic(void *) fsync_symbol;
 static _Atomic(void *) fdatasync_symbol;
+static _Atomic(void *) pread_symbol;
+static _Atomic(void *) pread64_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -195,4 +199,24 @@ int fdatasync(int fd) {
     return -1;
   }
   return next(fd);
+}
+
+ssize_t pread(int fd, void *buffer, size_t count, off_t offset) {
+  __extension__ const pread_fn next =
+      (pread_fn)zstdio_resolve_next(&pread_symbol, "pread");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, buffer, count, offset);
+}
+
+ssize_t pread64(int fd, void *buffer, size_t count, off64_t offset) {
+  __extension__ const pread64_fn next =
+      (pread64_fn)zstdio_resolve_next(&pread64_symbol, "pread64");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, buffer, count, offset);
 }

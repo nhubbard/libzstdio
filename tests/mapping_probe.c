@@ -11,6 +11,11 @@ static int check_shared_mapping(int fd) {
   unsigned char observed = 0;
   int status = EXIT_FAILURE;
 
+  if (lseek(fd, 0, SEEK_SET) != 0) {
+    perror("lseek before positional reads");
+    return EXIT_FAILURE;
+  }
+
   if (ftruncate(fd, 2) != 0) {
     perror("ftruncate");
     return EXIT_FAILURE;
@@ -48,6 +53,15 @@ static int check_shared_mapping(int fd) {
       status = EXIT_FAILURE;
     } else if (pread(fd, &observed, 1, 1) != 0) {
       fputs("ftruncate64: expected EOF at the new file length\n", stderr);
+      status = EXIT_FAILURE;
+    } else if (pread64(fd, &observed, 1, 4294967297LL) != 0) {
+      fputs("pread64: expected EOF at an offset beyond 4 GiB\n", stderr);
+      status = EXIT_FAILURE;
+    } else if (pread64(fd, &observed, 1, -1) != -1 || errno != EINVAL) {
+      fputs("pread64: expected EINVAL for a negative offset\n", stderr);
+      status = EXIT_FAILURE;
+    } else if (lseek(fd, 0, SEEK_CUR) != 0) {
+      fputs("positional reads changed the descriptor offset\n", stderr);
       status = EXIT_FAILURE;
     }
   }
