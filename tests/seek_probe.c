@@ -60,6 +60,44 @@ cleanup:
   return status;
 }
 
+static int check_positional_writes(int fd) {
+  const off64_t large_offset = 4294967296LL;
+  char observed;
+
+  if (lseek(fd, 7, SEEK_SET) != 7) {
+    perror("lseek before positional writes");
+    return EXIT_FAILURE;
+  }
+
+  if (pwrite(fd, "A", 1, 0) != 1) {
+    perror("pwrite");
+    return EXIT_FAILURE;
+  }
+
+  if (pwrite64(fd, "B", 1, large_offset) != 1) {
+    perror("pwrite64");
+    return EXIT_FAILURE;
+  }
+
+  if (lseek(fd, 0, SEEK_CUR) != 7) {
+    fputs("positional writes changed the descriptor offset\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (pread(fd, &observed, 1, 0) != 1 || observed != 'A' ||
+      pread64(fd, &observed, 1, large_offset) != 1 || observed != 'B') {
+    fputs("expected distinct bytes at offsets zero and 4 GiB\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (pwrite64(fd, "C", 1, -1) != -1 || errno != EINVAL) {
+    fputs("pwrite64: expected EINVAL for a negative offset\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
 int main(void) {
   char path[] = "zstdio-seek-XXXXXX";
   const off64_t large_offset = 4294967297LL;
@@ -99,6 +137,10 @@ int main(void) {
 
   if (lseek64(-1, 0, SEEK_SET) != (off64_t)-1 || errno != EBADF) {
     fputs("lseek64: expected EBADF for an invalid descriptor\n", stderr);
+    goto cleanup;
+  }
+
+  if (check_positional_writes(fd) != EXIT_SUCCESS) {
     goto cleanup;
   }
 
