@@ -39,6 +39,19 @@ static int check_shared_mapping(int fd) {
     status = EXIT_FAILURE;
   }
 
+  if (status == EXIT_SUCCESS) {
+    if (ftruncate64(fd, -1) != -1 || errno != EINVAL) {
+      fputs("ftruncate64: expected EINVAL for a negative length\n", stderr);
+      status = EXIT_FAILURE;
+    } else if (ftruncate64(fd, 1) != 0) {
+      perror("ftruncate64");
+      status = EXIT_FAILURE;
+    } else if (pread(fd, &observed, 1, 1) != 0) {
+      fputs("ftruncate64: expected EOF at the new file length\n", stderr);
+      status = EXIT_FAILURE;
+    }
+  }
+
   return status;
 }
 

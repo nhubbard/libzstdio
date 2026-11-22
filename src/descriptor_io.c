@@ -16,6 +16,8 @@ typedef off64_t (*lseek64_fn)(int, off64_t, int);
 typedef int (*fflush_fn)(FILE *);
 typedef int (*dup_fn)(int);
 typedef int (*dup2_fn)(int, int);
+typedef int (*ftruncate_fn)(int, off_t);
+typedef int (*ftruncate64_fn)(int, off64_t);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
@@ -25,6 +27,8 @@ static _Atomic(void *) lseek64_symbol;
 static _Atomic(void *) fflush_symbol;
 static _Atomic(void *) dup_symbol;
 static _Atomic(void *) dup2_symbol;
+static _Atomic(void *) ftruncate_symbol;
+static _Atomic(void *) ftruncate64_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -148,4 +152,24 @@ int dup2(int oldfd, int newfd) {
     return -1;
   }
   return next(oldfd, newfd);
+}
+
+int ftruncate(int fd, off_t length) {
+  __extension__ const ftruncate_fn next =
+      (ftruncate_fn)zstdio_resolve_next(&ftruncate_symbol, "ftruncate");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, length);
+}
+
+int ftruncate64(int fd, off64_t length) {
+  __extension__ const ftruncate64_fn next =
+      (ftruncate64_fn)zstdio_resolve_next(&ftruncate64_symbol, "ftruncate64");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, length);
 }
