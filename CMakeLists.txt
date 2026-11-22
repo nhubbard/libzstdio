@@ -13,6 +13,7 @@ set(CMAKE_C_EXTENSIONS ON)
 
 add_library(zstdio SHARED
 	src/interpose.c
+    src/descriptor_io.c
 )
 
 set_target_properties(zstdio PROPERTIES
