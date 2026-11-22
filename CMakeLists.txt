@@ -100,6 +100,16 @@ if(BUILD_TESTING)
 			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
 			$<TARGET_FILE:zstdio_stdio_probe>
 	)
+
+    add_executable(zstdio_seek_probe tests/seek_probe.c)
+	add_test(NAME seek_native COMMAND zstdio_seek_probe)
+	add_test(
+		NAME seek_preload
+		COMMAND
+			${CMAKE_COMMAND} -E env
+			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
+			$<TARGET_FILE:zstdio_seek_probe>
+	)
 endif()
 
 option(

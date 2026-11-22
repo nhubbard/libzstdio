@@ -10,10 +10,14 @@
 typedef ssize_t (*read_fn)(int, void *, size_t);
 typedef ssize_t (*write_fn)(int, const void *, size_t);
 typedef int (*close_fn)(int);
+typedef off_t (*lseek_fn)(int, off_t, int);
+typedef off64_t (*lseek64_fn)(int, off64_t, int);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
 static _Atomic(void *) close_symbol;
+static _Atomic(void *) lseek_symbol;
+static _Atomic(void *) lseek64_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -87,4 +91,24 @@ int close(int fd) {
   }
 
   return next(fd);
+}
+
+off_t lseek(int fd, off_t offset, int whence) {
+  __extension__ const lseek_fn next =
+      (lseek_fn)zstdio_resolve_next(&lseek_symbol, "lseek");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return (off_t)-1;
+  }
+  return next(fd, offset, whence);
+}
+
+off64_t lseek64(int fd, off64_t offset, int whence) {
+  __extension__ const lseek64_fn next =
+      (lseek64_fn)zstdio_resolve_next(&lseek64_symbol, "lseek64");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return (off64_t)-1;
+  }
+  return next(fd, offset, whence);
 }
