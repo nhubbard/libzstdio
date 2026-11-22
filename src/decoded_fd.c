@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -16,36 +17,48 @@ int zstdio_open_decoded_fd(const void *frame, size_t frame_size,
     return -1;
   }
 
-  const int fd =
-      memfd_create("zstdio-decoded", MFD_CLOEXEC | MFD_ALLOW_SEALING);
-  if (fd < 0) {
+  unsigned char *bytes = malloc(logical_size == 0 ? 1 : logical_size);
+  if (bytes == NULL) {
     return -1;
   }
 
-  if (ftruncate64(fd, (off64_t)logical_size) != 0) {
-    goto fail;
+  size_t written = 0;
+  if (zstdio_decompress_frame(frame, frame_size, bytes, logical_size,
+                              &written) != 0 ||
+      written != logical_size) {
+    free(bytes);
+    errno = EBADMSG;
+    return -1;
   }
 
-  unsigned char empty = 0;
-  void *destination = &empty;
-  if (logical_size != 0) {
-    destination =
-        mmap(NULL, logical_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (destination == MAP_FAILED) {
+  const int fd =
+      memfd_create("zstdio-decoded", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  if (fd < 0) {
+    const int saved_errno = errno;
+    free(bytes);
+    errno = saved_errno;
+    return -1;
+  }
+
+  const size_t max_chunk = 1024U * 1024U;
+  size_t offset = 0;
+  while (offset < logical_size) {
+    size_t chunk = logical_size - offset;
+    if (chunk > max_chunk) {
+      chunk = max_chunk;
+    }
+
+    const ssize_t count = pwrite64(fd, bytes + offset, chunk, (off64_t)offset);
+    if (count < 0 && errno == EINTR) {
+      continue;
+    }
+    if (count <= 0) {
+      if (count == 0) {
+        errno = EIO;
+      }
       goto fail;
     }
-  }
-
-  size_t written = 0;
-  const int decode_status = zstdio_decompress_frame(
-      frame, frame_size, destination, logical_size, &written);
-
-  if (logical_size != 0 && munmap(destination, logical_size) != 0) {
-    goto fail;
-  }
-  if (decode_status != 0 || written != logical_size) {
-    errno = EBADMSG;
-    goto fail;
+    offset += (size_t)count;
   }
 
   if (fcntl(fd, F_ADD_SEALS,
@@ -53,11 +66,13 @@ int zstdio_open_decoded_fd(const void *frame, size_t frame_size,
     goto fail;
   }
 
+  free(bytes);
   return fd;
 
 fail:
   {
     const int saved_errno = errno;
+    free(bytes);
     (void)close(fd);
     errno = saved_errno;
     return -1;

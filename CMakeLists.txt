@@ -3,66 +3,13 @@ cmake_minimum_required(VERSION 3.25)
 project(
 	libzstdio
 	VERSION 0.1.0
-	DESCRIPTION "Transparent Zstd filesystem interposition"
+	DESCRIPTION "Linux FUSE passthrough and Zstd codec"
 	LANGUAGES C
 )
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
-
-add_library(zstdio SHARED
-	src/interpose.c
-    src/descriptor_io.c
-    src/stdio_io.c
-    src/mapping_io.c
-    src/trace_io.c
-)
-
-include_directories(BEFORE src)
-
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$"
-   AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-    enable_language(ASM)
-    target_sources(zstdio PRIVATE src/variadic_x86_64.S)
-    target_compile_definitions(zstdio PRIVATE ZSTDIO_X86_64_VARIADIC)
-endif()
-
-set_target_properties(zstdio PROPERTIES
-	OUTPUT_NAME zstdio
-	VERSION ${PROJECT_VERSION}
-	SOVERSION 0
-)
-
-target_include_directories(zstdio PRIVATE
-	${PROJECT_SOURCE_DIR}/include
-)
-
-target_compile_definitions(zstdio PRIVATE
-	_GNU_SOURCE
-)
-
-target_compile_options(zstdio PRIVATE
-    $<$<COMPILE_LANGUAGE:C>:
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Wconversion
-        -Wsign-conversion
-        -Wshadow
-        -Wformat=2
-        -Wstrict-prototypes
-        -Wmissing-prototypes
-        -Wcast-align
-        -Wpointer-arith
-        -Wundef
-        -Werror
-    >
-)
-
-target_link_libraries(zstdio PRIVATE
-	${CMAKE_DL_LIBS}
-)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBZSTD REQUIRED IMPORTED_TARGET libzstd)
@@ -74,92 +21,34 @@ target_link_libraries(zstdio_codec PRIVATE PkgConfig::LIBZSTD)
 
 include(CTest)
 
-if(BUILD_TESTING)
-	add_executable(zstdio_probe tests/probe.c)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    pkg_check_modules(FUSE3 IMPORTED_TARGET fuse3)
+    if(FUSE3_FOUND)
+        add_executable(zstdio_fuse src/fuse_passthrough.c)
+        target_compile_definitions(zstdio_fuse PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
+        target_compile_options(zstdio_fuse PRIVATE -Wall -Wextra -Wpedantic)
+        target_link_libraries(zstdio_fuse PRIVATE PkgConfig::FUSE3)
 
-	add_test(
-		NAME preload_smoke_test
-		COMMAND
-			${CMAKE_COMMAND} -E env
-			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
-			$<TARGET_FILE:zstdio_probe>
-	)
-
-    add_executable(zstdio_openat_probe tests/openat_probe.c)
-    add_test(NAME openat_native COMMAND zstdio_openat_probe)
-    add_test(
-        NAME openat_preload
-        COMMAND
-            ${CMAKE_COMMAND} -E env
-            "LD_PRELOAD=$<TARGET_FILE:zstdio>"
-            $<TARGET_FILE:zstdio_openat_probe>
-    )
-
-    find_package(Threads REQUIRED)
-	add_executable(zstdio_descriptor_race tests/descriptor_race.c)
-	target_link_libraries(zstdio_descriptor_race PRIVATE Threads::Threads)
-
-	add_test(NAME descriptor_race_native COMMAND zstdio_descriptor_race)
-	add_test(
-		NAME descriptor_race_preload
-		COMMAND
-			${CMAKE_COMMAND} -E env
-			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
-			$<TARGET_FILE:zstdio_descriptor_race>
-	)
-	set_tests_properties(
-		descriptor_race_native descriptor_race_preload
-		PROPERTIES TIMEOUT 10
-	)
-
-    add_executable(zstdio_stdio_probe tests/stdio_probe.c)
-	add_test(NAME stdio_native COMMAND zstdio_stdio_probe)
-	add_test(
-		NAME stdio_preload
-		COMMAND
-			${CMAKE_COMMAND} -E env
-			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
-			$<TARGET_FILE:zstdio_stdio_probe>
-	)
-
-    add_executable(zstdio_seek_probe tests/seek_probe.c)
-	add_test(NAME seek_native COMMAND zstdio_seek_probe)
-	add_test(
-		NAME seek_preload
-		COMMAND
-			${CMAKE_COMMAND} -E env
-			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
-			$<TARGET_FILE:zstdio_seek_probe>
-	)
-
-    add_executable(zstdio_mapping_probe tests/mapping_probe.c)
-	add_test(NAME mapping_native COMMAND zstdio_mapping_probe)
-	add_test(
-		NAME mapping_preload
-		COMMAND
-			${CMAKE_COMMAND} -E env
-			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
-			$<TARGET_FILE:zstdio_mapping_probe>
-	)
-
-	add_executable(zstdio_codec_probe tests/codec_probe.c)
-	target_link_libraries(zstdio_codec_probe PRIVATE zstdio_codec)
-	add_test(NAME codec_roundtrip COMMAND zstdio_codec_probe)
+        if(BUILD_TESTING)
+            add_executable(zstdio_fuse_probe tests/fuse_probe.c)
+            target_compile_definitions(zstdio_fuse_probe PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
+            target_compile_options(zstdio_fuse_probe PRIVATE -Wall -Wextra -Wpedantic)
+            add_test(NAME fuse_probe_native
+                COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/fuse_passthrough.sh"
+                        native $<TARGET_FILE:zstdio_fuse_probe>)
+            add_test(NAME fuse_passthrough
+                COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/fuse_passthrough.sh"
+                        mounted $<TARGET_FILE:zstdio_fuse_probe> $<TARGET_FILE:zstdio_fuse>)
+            set_tests_properties(fuse_passthrough PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+        endif()
+    endif()
 endif()
 
-option(
-    ZSTDIO_ENABLE_SANITIZERS
-    "Enable AddressSanitizer and UBSan"
-    OFF
-)
+if(BUILD_TESTING)
+    add_executable(zstdio_codec_probe tests/codec_probe.c)
+    target_link_libraries(zstdio_codec_probe PRIVATE zstdio_codec)
+    add_test(NAME codec_roundtrip COMMAND zstdio_codec_probe)
 
-if(ZSTDIO_ENABLE_SANITIZERS)
-    target_compile_options(zstdio PRIVATE
-        -fsanitize=address,undefined
-        -fno-omit-frame-pointer
-    )
-
-    target_link_options(zstdio PRIVATE
-        -fsanitize=address,undefined
-    )
+    add_executable(zstdio_shadow_fd_probe tests/shadow_fd_probe.c)
+    target_link_libraries(zstdio_shadow_fd_probe PRIVATE zstdio_codec)
 endif()
