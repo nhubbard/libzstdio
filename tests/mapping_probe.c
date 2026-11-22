@@ -55,6 +55,30 @@ static int check_shared_mapping(int fd) {
   return status;
 }
 
+static int check_sync(int fd) {
+  if (fdatasync(fd) != 0) {
+    perror("fdatasync");
+    return EXIT_FAILURE;
+  }
+
+  if (fsync(fd) != 0) {
+    perror("fsync");
+    return EXIT_FAILURE;
+  }
+
+  if (fdatasync(-1) != -1 || errno != EBADF) {
+    fputs("fdatasync: expected EBADF for an invalid descriptor\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (fsync(-1) != -1 || errno != EBADF) {
+    fputs("fsync: expected EBADF for an invalid descriptor\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
 int main(void) {
   char path[] = "zstdio-mapping-XXXXXX";
   const unsigned char expected = 0xa5;
@@ -74,6 +98,10 @@ int main(void) {
   }
 
   if (check_shared_mapping(fd) != EXIT_SUCCESS) {
+    goto cleanup;
+  }
+
+  if (check_sync(fd) != EXIT_SUCCESS) {
     goto cleanup;
   }
 
