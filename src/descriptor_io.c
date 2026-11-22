@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/syscall.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include "resolve.h"
@@ -23,6 +24,7 @@ typedef ssize_t (*pread_fn)(int, void *, size_t, off_t);
 typedef ssize_t (*pread64_fn)(int, void *, size_t, off64_t);
 typedef ssize_t (*pwrite_fn)(int, const void *, size_t, off_t);
 typedef ssize_t (*pwrite64_fn)(int, const void *, size_t, off64_t);
+typedef ssize_t (*vector_io_fn)(int, const struct iovec *, int);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
@@ -40,6 +42,8 @@ static _Atomic(void *) pread_symbol;
 static _Atomic(void *) pread64_symbol;
 static _Atomic(void *) pwrite_symbol;
 static _Atomic(void *) pwrite64_symbol;
+static _Atomic(void *) readv_symbol;
+static _Atomic(void *) writev_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -243,4 +247,24 @@ ssize_t pwrite64(int fd, const void *buffer, size_t count, off64_t offset) {
     return -1;
   }
   return next(fd, buffer, count, offset);
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt) {
+  __extension__ const vector_io_fn next =
+      (vector_io_fn)zstdio_resolve_next(&readv_symbol, "readv");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, iov, iovcnt);
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
+  __extension__ const vector_io_fn next =
+      (vector_io_fn)zstdio_resolve_next(&writev_symbol, "writev");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, iov, iovcnt);
 }

@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 static int check_duplication(int fd) {
@@ -98,6 +99,54 @@ static int check_positional_writes(int fd) {
   return EXIT_SUCCESS;
 }
 
+static int check_vector_io(int fd) {
+  char first[] = {'A', 'B'};
+  char last = 'C';
+  char head = 0;
+  char tail[2] = {0};
+  const struct iovec output[] = {
+      {.iov_base = first, .iov_len = sizeof(first)},
+      {.iov_base = &last, .iov_len = sizeof(last)},
+  };
+  const struct iovec input[] = {
+      {.iov_base = &head, .iov_len = sizeof(head)},
+      {.iov_base = tail, .iov_len = sizeof(tail)},
+  };
+
+  if (lseek(fd, 32, SEEK_SET) != 32) {
+    perror("lseek before writev");
+    return EXIT_FAILURE;
+  }
+
+  if (writev(fd, output, 2) != 3 || lseek(fd, 0, SEEK_CUR) != 35) {
+    fputs("writev: expected three bytes and offset 35\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (lseek(fd, 32, SEEK_SET) != 32) {
+    perror("lseek before readv");
+    return EXIT_FAILURE;
+  }
+
+  if (readv(fd, input, 2) != 3 || head != 'A' || tail[0] != 'B' ||
+      tail[1] != 'C' || lseek(fd, 0, SEEK_CUR) != 35) {
+    fputs("readv: expected ABC across both buffers and offset 35\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (readv(-1, input, 2) != -1 || errno != EBADF) {
+    fputs("readv: expected EBADF for an invalid descriptor\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (writev(-1, output, 2) != -1 || errno != EBADF) {
+    fputs("writev: expected EBADF for an invalid descriptor\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
 int main(void) {
   char path[] = "zstdio-seek-XXXXXX";
   const off64_t large_offset = 4294967297LL;
@@ -141,6 +190,10 @@ int main(void) {
   }
 
   if (check_positional_writes(fd) != EXIT_SUCCESS) {
+    goto cleanup;
+  }
+
+  if (check_vector_io(fd) != EXIT_SUCCESS) {
     goto cleanup;
   }
 
