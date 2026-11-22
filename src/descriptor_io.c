@@ -1,12 +1,3 @@
-#include <dlfcn.h>
-#include <errno.h>
-#include <stdatomic.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <sys/syscall.h>
-#include <sys/uio.h>
-#include <unistd.h>
-
 #include "forward.h"
 
 typedef ssize_t (*read_fn)(int, void *, size_t);

@@ -3,8 +3,21 @@
 
 #include "resolve.h" // IWYU pragma: keep
 
+#include <dirent.h>
+#include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdatomic.h>
 #include <stddef.h>
+#include <stdio.h> // IWYU pragma: keep
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/vfs.h>
+#include <unistd.h>
 
 #define FORWARD(type, name, parameters, arguments, failure)                    \
   static _Atomic(void *) name##_symbol;                                        \

@@ -1,14 +1,5 @@
 #include "forward.h"
 
-#include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <sys/stat.h>
-#include <sys/statvfs.h>
-#include <sys/vfs.h>
-#include <unistd.h>
-
 /* glibc fortified entry points, also needed without _FORTIFY_SOURCE. */
 extern int __open_2(const char *, int);
 extern int __open64_2(const char *, int);
@@ -55,6 +46,11 @@ FORWARD(int, statvfs64, (const char *path, struct statvfs64 *info),
 FORWARD(int, execve, (const char *path, char *const argv[], char *const envp[]),
         (path, argv, envp), -1)
 FORWARD(int, execvp, (const char *file, char *const argv[]), (file, argv), -1)
+
+FORWARD(int, statx,
+        (int dirfd, const char *path, int flags, unsigned int mask,
+         struct statx *info),
+        (dirfd, path, flags, mask, info), -1)
 
 #ifdef ZSTDIO_X86_64_VARIADIC
 

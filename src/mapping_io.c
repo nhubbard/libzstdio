@@ -1,8 +1,5 @@
 #include "forward.h"
 
-#include <sys/mman.h>
-#include <sys/types.h>
-
 FORWARD(void *, mmap,
         (void *address, size_t length, int protection, int flags, int fd,
          off_t offset),

@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
@@ -193,6 +194,26 @@ static int check_vector_io(int fd) {
   return EXIT_SUCCESS;
 }
 
+static int check_statx(int fd) {
+  struct statx info = {0};
+
+  if (statx(fd, "", AT_EMPTY_PATH, STATX_SIZE, &info) != 0) {
+    perror("statx");
+    return EXIT_FAILURE;
+  }
+  if ((info.stx_mask & STATX_SIZE) == 0 || info.stx_size != 0) {
+    fputs("statx: expected a reported size of zero\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (statx(-1, "", AT_EMPTY_PATH, STATX_SIZE, &info) != -1 || errno != EBADF) {
+    fputs("statx: expected EBADF for an invalid descriptor\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
 int main(void) {
   char path[] = "zstdio-seek-XXXXXX";
   const off64_t large_offset = 4294967297LL;
@@ -232,6 +253,10 @@ int main(void) {
 
   if (lseek64(-1, 0, SEEK_SET) != (off64_t)-1 || errno != EBADF) {
     fputs("lseek64: expected EBADF for an invalid descriptor\n", stderr);
+    goto cleanup;
+  }
+
+  if (check_statx(fd) != EXIT_SUCCESS) {
     goto cleanup;
   }
 

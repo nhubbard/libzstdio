@@ -19,6 +19,8 @@ add_library(zstdio SHARED
     src/trace_io.c
 )
 
+include_directories(BEFORE src)
+
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$"
    AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     enable_language(ASM)
