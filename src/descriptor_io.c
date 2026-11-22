@@ -27,6 +27,8 @@ typedef ssize_t (*pwrite64_fn)(int, const void *, size_t, off64_t);
 typedef ssize_t (*vector_io_fn)(int, const struct iovec *, int);
 typedef ssize_t (*positional_vector_io_fn)(int, const struct iovec *, int,
                                            off_t);
+typedef ssize_t (*positional_vector_io64_fn)(int, const struct iovec *, int,
+                                             off64_t);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
@@ -48,6 +50,8 @@ static _Atomic(void *) readv_symbol;
 static _Atomic(void *) writev_symbol;
 static _Atomic(void *) preadv_symbol;
 static _Atomic(void *) pwritev_symbol;
+static _Atomic(void *) preadv64_symbol;
+static _Atomic(void *) pwritev64_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -286,6 +290,28 @@ ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
 ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
   __extension__ const positional_vector_io_fn next =
       (positional_vector_io_fn)zstdio_resolve_next(&pwritev_symbol, "pwritev");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, iov, iovcnt, offset);
+}
+
+ssize_t preadv64(int fd, const struct iovec *iov, int iovcnt, off64_t offset) {
+  __extension__ const positional_vector_io64_fn next =
+      (positional_vector_io64_fn)zstdio_resolve_next(&preadv64_symbol,
+                                                     "preadv64");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(fd, iov, iovcnt, offset);
+}
+
+ssize_t pwritev64(int fd, const struct iovec *iov, int iovcnt, off64_t offset) {
+  __extension__ const positional_vector_io64_fn next =
+      (positional_vector_io64_fn)zstdio_resolve_next(&pwritev64_symbol,
+                                                     "pwritev64");
   if (next == NULL) {
     errno = ENOSYS;
     return -1;

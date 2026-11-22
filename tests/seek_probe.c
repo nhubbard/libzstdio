@@ -168,6 +168,28 @@ static int check_vector_io(int fd) {
     return EXIT_FAILURE;
   }
 
+  const off64_t high_offset = 4294967312LL; /* 4 GiB + 16 */
+  char observed;
+
+  if (pwritev64(fd, output, 2, high_offset) != 3 ||
+      pread64(fd, &observed, 1, high_offset) != 1 || observed != 'A' ||
+      pread(fd, &observed, 1, 16) != 1 || observed != '\0' ||
+      lseek(fd, 0, SEEK_CUR) != 35) {
+    fputs("pwritev64: expected a high-offset write and unchanged position\n",
+          stderr);
+    return EXIT_FAILURE;
+  }
+
+  head = 0;
+  tail[0] = 0;
+  tail[1] = 0;
+  if (preadv64(fd, input, 2, high_offset) != 3 || head != 'A' ||
+      tail[0] != 'B' || tail[1] != 'C' || lseek(fd, 0, SEEK_CUR) != 35) {
+    fputs("preadv64: expected ABC at the high offset and unchanged position\n",
+          stderr);
+    return EXIT_FAILURE;
+  }
+
   return EXIT_SUCCESS;
 }
 
