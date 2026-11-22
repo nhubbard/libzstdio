@@ -24,10 +24,10 @@ include(CTest)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     pkg_check_modules(FUSE3 IMPORTED_TARGET fuse3)
     if(FUSE3_FOUND)
-        add_executable(zstdio_fuse src/fuse_passthrough.c)
+        add_executable(zstdio_fuse src/fuse_passthrough.c src/fuse_storage.c)
         target_compile_definitions(zstdio_fuse PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
         target_compile_options(zstdio_fuse PRIVATE -Wall -Wextra -Wpedantic)
-        target_link_libraries(zstdio_fuse PRIVATE PkgConfig::FUSE3)
+        target_link_libraries(zstdio_fuse PRIVATE PkgConfig::FUSE3 PkgConfig::LIBZSTD)
 
         if(BUILD_TESTING)
             add_executable(zstdio_fuse_probe tests/fuse_probe.c)
@@ -40,6 +40,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                 COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/fuse_passthrough.sh"
                         mounted $<TARGET_FILE:zstdio_fuse_probe> $<TARGET_FILE:zstdio_fuse>)
             set_tests_properties(fuse_passthrough PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+            find_program(ZSTD_TRAINER zstd)
+            if(ZSTD_TRAINER)
+                add_test(NAME fuse_dictionary
+                    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/fuse_passthrough.sh"
+                            dictionary $<TARGET_FILE:zstdio_fuse_probe>
+                            $<TARGET_FILE:zstdio_fuse> "${ZSTD_TRAINER}")
+                set_tests_properties(fuse_dictionary PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+            endif()
         endif()
     endif()
 endif()

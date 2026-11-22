@@ -136,13 +136,102 @@ static void test_mappings(void)
     CHECK(munmap(plain, length) == 0);
 }
 
+enum { COMPRESSED_SIZE = 65536 };
+
+static void verify_compressed(void)
+{
+    int fd = open("compressed.olean", O_RDONLY);
+    CHECK(fd >= 0);
+    check_size(fd, "", AT_EMPTY_PATH, COMPRESSED_SIZE);
+    check_size(AT_FDCWD, "compressed.olean", 0, COMPRESSED_SIZE);
+    const char *data = mmap(NULL, COMPRESSED_SIZE, PROT_READ, MAP_PRIVATE, fd, 0);
+    CHECK(data != MAP_FAILED);
+    for (size_t i = 0; i < COMPRESSED_SIZE; i++) {
+        char expected = i == 2048 ? 'B' : (i == 4096 ? 'C' : 'A');
+        CHECK(data[i] == expected);
+    }
+    CHECK(munmap((void *)data, COMPRESSED_SIZE) == 0);
+    CHECK(close(fd) == 0);
+}
+
+static void test_compression(void)
+{
+    int fd = open("pending.olean", O_CREAT | O_EXCL | O_RDWR, 0600);
+    CHECK(fd >= 0);
+    char contents[COMPRESSED_SIZE];
+    memset(contents, 'A', sizeof(contents));
+    CHECK(write(fd, contents, sizeof(contents)) == (ssize_t)sizeof(contents));
+    CHECK(fsync(fd) == 0);
+    CHECK(rename("pending.olean", "compressed.olean") == 0);
+
+    int reader = open("compressed.olean", O_RDONLY);
+    CHECK(reader >= 0);
+    CHECK(pwrite(fd, "B", 1, 2048) == 1);
+    char written;
+    CHECK(pread(reader, &written, 1, 2048) == 1 && written == 'B');
+    CHECK(close(reader) == 0);
+
+    char *shared = mmap(NULL, COMPRESSED_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_SHARED, fd, 0);
+    CHECK(shared != MAP_FAILED);
+    CHECK(fsync(fd) == 0);
+    CHECK(close(fd) == 0);
+    shared[4096] = 'C';
+    CHECK(msync(shared, COMPRESSED_SIZE, MS_SYNC) == 0);
+    CHECK(munmap(shared, COMPRESSED_SIZE) == 0);
+    verify_compressed();
+}
+
+static void test_append_to_open_plain_file(void)
+{
+    CHECK(close(create_file("append", "old")) == 0);
+    int reader = open("append", O_RDONLY);
+    CHECK(reader >= 0);
+    int writer = open("append", O_WRONLY | O_APPEND);
+    CHECK(writer >= 0);
+    CHECK(write(writer, "+new", 4) == 4);
+    check_bytes(reader, "old+new");
+    CHECK(close(writer) == 0);
+    CHECK(close(reader) == 0);
+    CHECK(unlink("append") == 0);
+}
+
+static void test_many_mappings(void)
+{
+    enum { COUNT = 160 };
+    const char *mappings[COUNT];
+    CHECK(mkdir("mapped", 0700) == 0);
+    for (size_t i = 0; i < COUNT; i++) {
+        char path[32];
+        snprintf(path, sizeof(path), "mapped/%zu", i);
+        int fd = create_file(path, "x");
+        mappings[i] = mmap(NULL, 1, PROT_READ, MAP_PRIVATE, fd, 0);
+        CHECK(mappings[i] != MAP_FAILED);
+        CHECK(close(fd) == 0);
+        CHECK(unlink(path) == 0);
+    }
+    for (size_t i = 0; i < COUNT; i++) {
+        CHECK(mappings[i][0] == 'x');
+        CHECK(munmap((void *)mappings[i], 1) == 0);
+    }
+    CHECK(rmdir("mapped") == 0);
+}
+
 int main(int argc, char **argv)
 {
-    CHECK(argc == 2);
+    CHECK(argc == 2 || argc == 3);
     CHECK(chdir(argv[1]) == 0);
+    if (argc == 3) {
+        CHECK(strcmp(argv[2], "verify-compressed") == 0);
+        verify_compressed();
+        return EXIT_SUCCESS;
+    }
     test_truncate();
     test_rename_and_unlink();
     test_mappings();
-    puts("statx, truncate, rename/unlink, and private mapping probes passed");
+    test_compression();
+    test_append_to_open_plain_file();
+    test_many_mappings();
+    puts("statx, truncate, rename/unlink, and private/shared mapping probes passed");
     return EXIT_SUCCESS;
 }
