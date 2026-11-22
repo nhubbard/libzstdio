@@ -6,6 +6,42 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+static int check_shared_mapping(int fd) {
+  const unsigned char updated = 0x3c;
+  unsigned char observed = 0;
+  int status = EXIT_FAILURE;
+
+  if (ftruncate(fd, 2) != 0) {
+    perror("ftruncate");
+    return EXIT_FAILURE;
+  }
+
+  unsigned char *bytes =
+      mmap(NULL, 2, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (bytes == MAP_FAILED) {
+    perror("mmap shared");
+    return EXIT_FAILURE;
+  }
+
+  bytes[1] = updated;
+  if (msync(bytes, 2, MS_SYNC) != 0) {
+    perror("msync");
+  } else if (pread(fd, &observed, 1, 1) != 1 || observed != updated) {
+    fputs("msync: expected the mapped store in the file\n", stderr);
+  } else if (msync(bytes + 1, 1, MS_SYNC) != -1 || errno != EINVAL) {
+    fputs("msync: expected EINVAL for an unaligned address\n", stderr);
+  } else {
+    status = EXIT_SUCCESS;
+  }
+
+  if (munmap(bytes, 2) != 0) {
+    perror("munmap shared");
+    status = EXIT_FAILURE;
+  }
+
+  return status;
+}
+
 int main(void) {
   char path[] = "zstdio-mapping-XXXXXX";
   const unsigned char expected = 0xa5;
@@ -21,6 +57,10 @@ int main(void) {
 
   if (unlink(path) != 0 || write(fd, &expected, 1) != 1) {
     perror("prepare mapping file");
+    goto cleanup;
+  }
+
+  if (check_shared_mapping(fd) != EXIT_SUCCESS) {
     goto cleanup;
   }
 

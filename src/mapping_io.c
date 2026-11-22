@@ -8,10 +8,12 @@
 typedef void *(*mmap_fn)(void *, size_t, int, int, int, off_t);
 typedef void *(*mmap64_fn)(void *, size_t, int, int, int, off64_t);
 typedef int (*munmap_fn)(void *, size_t);
+typedef int (*msync_fn)(void *, size_t, int);
 
 static _Atomic(void *) mmap_symbol;
 static _Atomic(void *) mmap64_symbol;
 static _Atomic(void *) munmap_symbol;
+static _Atomic(void *) msync_symbol;
 
 void *mmap(void *address, size_t length, int protection, int flags, int fd,
            off_t offset) {
@@ -43,4 +45,14 @@ int munmap(void *address, size_t length) {
     return -1;
   }
   return next(address, length);
+}
+
+int msync(void *address, size_t length, int flags) {
+  __extension__ const msync_fn next =
+      (msync_fn)zstdio_resolve_next(&msync_symbol, "msync");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return next(address, length, flags);
 }
