@@ -5,6 +5,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include "resolve.h"
+
 typedef ssize_t (*read_fn)(int, void *, size_t);
 typedef ssize_t (*write_fn)(int, const void *, size_t);
 typedef int (*close_fn)(int);
@@ -16,10 +18,12 @@ static _Atomic(void *) close_symbol;
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
 
-static void *resolve_next(_Atomic(void *) *slot, const char *name) {
+void *zstdio_resolve_next(_Atomic(void *) *slot, const char *name) {
   void *symbol = atomic_load_explicit(slot, memory_order_acquire);
   if (symbol != NULL)
     return symbol;
+  if (resolving)
+    return NULL;
   const int saved_errno = errno;
   resolving = 1;
   symbol = dlsym(RTLD_NEXT, name);
@@ -46,7 +50,7 @@ ssize_t read(int fd, void *buffer, size_t count) {
 
   // POSIX supports converting a dlsym result to a function pointer.
   __extension__ const read_fn next =
-      (read_fn)resolve_next(&read_symbol, "read");
+      (read_fn)zstdio_resolve_next(&read_symbol, "read");
   if (next == NULL) {
     errno = ENOSYS;
     return -1;
@@ -61,7 +65,7 @@ ssize_t write(int fd, const void *buffer, size_t count) {
   }
 
   __extension__ const write_fn next =
-      (write_fn)resolve_next(&write_symbol, "write");
+      (write_fn)zstdio_resolve_next(&write_symbol, "write");
   if (next == NULL) {
     errno = ENOSYS;
     return -1;
@@ -76,7 +80,7 @@ int close(int fd) {
   }
 
   __extension__ const close_fn next =
-      (close_fn)resolve_next(&close_symbol, "close");
+      (close_fn)zstdio_resolve_next(&close_symbol, "close");
   if (next == NULL) {
     errno = ENOSYS;
     return -1;

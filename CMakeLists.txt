@@ -14,6 +14,7 @@ set(CMAKE_C_EXTENSIONS ON)
 add_library(zstdio SHARED
 	src/interpose.c
     src/descriptor_io.c
+    src/stdio_io.c
 )
 
 set_target_properties(zstdio PROPERTIES
@@ -88,6 +89,16 @@ if(BUILD_TESTING)
 	set_tests_properties(
 		descriptor_race_native descriptor_race_preload
 		PROPERTIES TIMEOUT 10
+	)
+
+    add_executable(zstdio_stdio_probe tests/stdio_probe.c)
+	add_test(NAME stdio_native COMMAND zstdio_stdio_probe)
+	add_test(
+		NAME stdio_preload
+		COMMAND
+			${CMAKE_COMMAND} -E env
+			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
+			$<TARGET_FILE:zstdio_stdio_probe>
 	)
 endif()
 
