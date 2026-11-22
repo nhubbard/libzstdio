@@ -144,6 +144,30 @@ static int check_vector_io(int fd) {
     return EXIT_FAILURE;
   }
 
+  if (pwritev(fd, output, 2, 48) != 3 || lseek(fd, 0, SEEK_CUR) != 35) {
+    fputs("pwritev: expected three bytes and an unchanged offset\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  head = 0;
+  tail[0] = 0;
+  tail[1] = 0;
+  if (preadv(fd, input, 2, 48) != 3 || head != 'A' || tail[0] != 'B' ||
+      tail[1] != 'C' || lseek(fd, 0, SEEK_CUR) != 35) {
+    fputs("preadv: expected ABC and an unchanged offset\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (preadv(fd, input, 2, -1) != -1 || errno != EINVAL) {
+    fputs("preadv: expected EINVAL for a negative offset\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  if (pwritev(fd, output, 2, -1) != -1 || errno != EINVAL) {
+    fputs("pwritev: expected EINVAL for a negative offset\n", stderr);
+    return EXIT_FAILURE;
+  }
+
   return EXIT_SUCCESS;
 }
 
