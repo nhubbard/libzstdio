@@ -16,7 +16,15 @@ add_library(zstdio SHARED
     src/descriptor_io.c
     src/stdio_io.c
     src/mapping_io.c
+    src/trace_io.c
 )
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$"
+   AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    enable_language(ASM)
+    target_sources(zstdio PRIVATE src/variadic_x86_64.S)
+    target_compile_definitions(zstdio PRIVATE ZSTDIO_X86_64_VARIADIC)
+endif()
 
 set_target_properties(zstdio PROPERTIES
 	OUTPUT_NAME zstdio
@@ -33,19 +41,21 @@ target_compile_definitions(zstdio PRIVATE
 )
 
 target_compile_options(zstdio PRIVATE
-    -Wall
-    -Wextra
-    -Wpedantic
-    -Wconversion
-    -Wsign-conversion
-    -Wshadow
-    -Wformat=2
-    -Wstrict-prototypes
-    -Wmissing-prototypes
-    -Wcast-align
-    -Wpointer-arith
-    -Wundef
-    -Werror
+    $<$<COMPILE_LANGUAGE:C>:
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wconversion
+        -Wsign-conversion
+        -Wshadow
+        -Wformat=2
+        -Wstrict-prototypes
+        -Wmissing-prototypes
+        -Wcast-align
+        -Wpointer-arith
+        -Wundef
+        -Werror
+    >
 )
 
 target_link_libraries(zstdio PRIVATE
