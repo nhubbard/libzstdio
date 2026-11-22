@@ -30,9 +30,19 @@ target_compile_definitions(zstdio PRIVATE
 )
 
 target_compile_options(zstdio PRIVATE
-	-Wall
-	-Wextra
-	-Wpedantic
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wconversion
+    -Wsign-conversion
+    -Wshadow
+    -Wformat=2
+    -Wstrict-prototypes
+    -Wmissing-prototypes
+    -Wcast-align
+    -Wpointer-arith
+    -Wundef
+    -Werror
 )
 
 target_link_libraries(zstdio PRIVATE
@@ -51,4 +61,21 @@ if(BUILD_TESTING)
 			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
 			$<TARGET_FILE:zstdio_probe>
 	)
+endif()
+
+option(
+    ZSTDIO_ENABLE_SANITIZERS
+    "Enable AddressSanitizer and UBSan"
+    OFF
+)
+
+if(ZSTDIO_ENABLE_SANITIZERS)
+    target_compile_options(zstdio PRIVATE
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+    )
+
+    target_link_options(zstdio PRIVATE
+        -fsanitize=address,undefined
+    )
 endif()
