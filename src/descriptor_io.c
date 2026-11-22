@@ -7,51 +7,14 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include "resolve.h"
+#include "forward.h"
 
 typedef ssize_t (*read_fn)(int, void *, size_t);
 typedef ssize_t (*write_fn)(int, const void *, size_t);
 typedef int (*close_fn)(int);
-typedef off_t (*lseek_fn)(int, off_t, int);
-typedef off64_t (*lseek64_fn)(int, off64_t, int);
-typedef int (*fflush_fn)(FILE *);
-typedef int (*dup_fn)(int);
-typedef int (*dup2_fn)(int, int);
-typedef int (*ftruncate_fn)(int, off_t);
-typedef int (*ftruncate64_fn)(int, off64_t);
-typedef int (*sync_fd_fn)(int);
-typedef ssize_t (*pread_fn)(int, void *, size_t, off_t);
-typedef ssize_t (*pread64_fn)(int, void *, size_t, off64_t);
-typedef ssize_t (*pwrite_fn)(int, const void *, size_t, off_t);
-typedef ssize_t (*pwrite64_fn)(int, const void *, size_t, off64_t);
-typedef ssize_t (*vector_io_fn)(int, const struct iovec *, int);
-typedef ssize_t (*positional_vector_io_fn)(int, const struct iovec *, int,
-                                           off_t);
-typedef ssize_t (*positional_vector_io64_fn)(int, const struct iovec *, int,
-                                             off64_t);
-
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
 static _Atomic(void *) close_symbol;
-static _Atomic(void *) lseek_symbol;
-static _Atomic(void *) lseek64_symbol;
-static _Atomic(void *) fflush_symbol;
-static _Atomic(void *) dup_symbol;
-static _Atomic(void *) dup2_symbol;
-static _Atomic(void *) ftruncate_symbol;
-static _Atomic(void *) ftruncate64_symbol;
-static _Atomic(void *) fsync_symbol;
-static _Atomic(void *) fdatasync_symbol;
-static _Atomic(void *) pread_symbol;
-static _Atomic(void *) pread64_symbol;
-static _Atomic(void *) pwrite_symbol;
-static _Atomic(void *) pwrite64_symbol;
-static _Atomic(void *) readv_symbol;
-static _Atomic(void *) writev_symbol;
-static _Atomic(void *) preadv_symbol;
-static _Atomic(void *) pwritev_symbol;
-static _Atomic(void *) preadv64_symbol;
-static _Atomic(void *) pwritev64_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -127,194 +90,58 @@ int close(int fd) {
   return next(fd);
 }
 
-off_t lseek(int fd, off_t offset, int whence) {
-  __extension__ const lseek_fn next =
-      (lseek_fn)zstdio_resolve_next(&lseek_symbol, "lseek");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return (off_t)-1;
-  }
-  return next(fd, offset, whence);
-}
+FORWARD(off_t, lseek, (int fd, off_t offset, int whence), (fd, offset, whence),
+        (off_t)-1)
 
-off64_t lseek64(int fd, off64_t offset, int whence) {
-  __extension__ const lseek64_fn next =
-      (lseek64_fn)zstdio_resolve_next(&lseek64_symbol, "lseek64");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return (off64_t)-1;
-  }
-  return next(fd, offset, whence);
-}
+FORWARD(off64_t, lseek64, (int fd, off64_t offset, int whence),
+        (fd, offset, whence), (off64_t)-1)
 
-int fflush(FILE *stream) {
-  __extension__ const fflush_fn next =
-      (fflush_fn)zstdio_resolve_next(&fflush_symbol, "fflush");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return EOF;
-  }
-  return next(stream);
-}
+FORWARD(int, fflush, (FILE * stream), (stream), EOF)
 
-int dup(int oldfd) {
-  __extension__ const dup_fn next =
-      (dup_fn)zstdio_resolve_next(&dup_symbol, "dup");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(oldfd);
-}
+FORWARD(int, dup, (int oldfd), (oldfd), -1)
 
-int dup2(int oldfd, int newfd) {
-  __extension__ const dup2_fn next =
-      (dup2_fn)zstdio_resolve_next(&dup2_symbol, "dup2");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(oldfd, newfd);
-}
+FORWARD(int, dup2, (int oldfd, int newfd), (oldfd, newfd), -1)
 
-int ftruncate(int fd, off_t length) {
-  __extension__ const ftruncate_fn next =
-      (ftruncate_fn)zstdio_resolve_next(&ftruncate_symbol, "ftruncate");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, length);
-}
+FORWARD(int, ftruncate, (int fd, off_t length), (fd, length), -1)
 
-int ftruncate64(int fd, off64_t length) {
-  __extension__ const ftruncate64_fn next =
-      (ftruncate64_fn)zstdio_resolve_next(&ftruncate64_symbol, "ftruncate64");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, length);
-}
+FORWARD(int, ftruncate64, (int fd, off64_t length), (fd, length), -1)
 
-int fsync(int fd) {
-  __extension__ const sync_fd_fn next =
-      (sync_fd_fn)zstdio_resolve_next(&fsync_symbol, "fsync");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd);
-}
+FORWARD(int, fsync, (int fd), (fd), -1)
 
-int fdatasync(int fd) {
-  __extension__ const sync_fd_fn next =
-      (sync_fd_fn)zstdio_resolve_next(&fdatasync_symbol, "fdatasync");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd);
-}
+FORWARD(int, fdatasync, (int fd), (fd), -1)
 
-ssize_t pread(int fd, void *buffer, size_t count, off_t offset) {
-  __extension__ const pread_fn next =
-      (pread_fn)zstdio_resolve_next(&pread_symbol, "pread");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, buffer, count, offset);
-}
+FORWARD(ssize_t, pread, (int fd, void *buffer, size_t count, off_t offset),
+        (fd, buffer, count, offset), -1)
 
-ssize_t pread64(int fd, void *buffer, size_t count, off64_t offset) {
-  __extension__ const pread64_fn next =
-      (pread64_fn)zstdio_resolve_next(&pread64_symbol, "pread64");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, buffer, count, offset);
-}
+FORWARD(ssize_t, pread64, (int fd, void *buffer, size_t count, off64_t offset),
+        (fd, buffer, count, offset), -1)
 
-ssize_t pwrite(int fd, const void *buffer, size_t count, off_t offset) {
-  __extension__ const pwrite_fn next =
-      (pwrite_fn)zstdio_resolve_next(&pwrite_symbol, "pwrite");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, buffer, count, offset);
-}
+FORWARD(ssize_t, pwrite,
+        (int fd, const void *buffer, size_t count, off_t offset),
+        (fd, buffer, count, offset), -1)
 
-ssize_t pwrite64(int fd, const void *buffer, size_t count, off64_t offset) {
-  __extension__ const pwrite64_fn next =
-      (pwrite64_fn)zstdio_resolve_next(&pwrite64_symbol, "pwrite64");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, buffer, count, offset);
-}
+FORWARD(ssize_t, pwrite64,
+        (int fd, const void *buffer, size_t count, off64_t offset),
+        (fd, buffer, count, offset), -1)
 
-ssize_t readv(int fd, const struct iovec *iov, int iovcnt) {
-  __extension__ const vector_io_fn next =
-      (vector_io_fn)zstdio_resolve_next(&readv_symbol, "readv");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, iov, iovcnt);
-}
+FORWARD(ssize_t, readv, (int fd, const struct iovec *iov, int iovcnt),
+        (fd, iov, iovcnt), -1)
 
-ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
-  __extension__ const vector_io_fn next =
-      (vector_io_fn)zstdio_resolve_next(&writev_symbol, "writev");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, iov, iovcnt);
-}
+FORWARD(ssize_t, writev, (int fd, const struct iovec *iov, int iovcnt),
+        (fd, iov, iovcnt), -1)
 
-ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
-  __extension__ const positional_vector_io_fn next =
-      (positional_vector_io_fn)zstdio_resolve_next(&preadv_symbol, "preadv");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, iov, iovcnt, offset);
-}
+FORWARD(ssize_t, preadv,
+        (int fd, const struct iovec *iov, int iovcnt, off_t offset),
+        (fd, iov, iovcnt, offset), -1)
 
-ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
-  __extension__ const positional_vector_io_fn next =
-      (positional_vector_io_fn)zstdio_resolve_next(&pwritev_symbol, "pwritev");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, iov, iovcnt, offset);
-}
+FORWARD(ssize_t, pwritev,
+        (int fd, const struct iovec *iov, int iovcnt, off_t offset),
+        (fd, iov, iovcnt, offset), -1)
 
-ssize_t preadv64(int fd, const struct iovec *iov, int iovcnt, off64_t offset) {
-  __extension__ const positional_vector_io64_fn next =
-      (positional_vector_io64_fn)zstdio_resolve_next(&preadv64_symbol,
-                                                     "preadv64");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, iov, iovcnt, offset);
-}
+FORWARD(ssize_t, preadv64,
+        (int fd, const struct iovec *iov, int iovcnt, off64_t offset),
+        (fd, iov, iovcnt, offset), -1)
 
-ssize_t pwritev64(int fd, const struct iovec *iov, int iovcnt, off64_t offset) {
-  __extension__ const positional_vector_io64_fn next =
-      (positional_vector_io64_fn)zstdio_resolve_next(&pwritev64_symbol,
-                                                     "pwritev64");
-  if (next == NULL) {
-    errno = ENOSYS;
-    return -1;
-  }
-  return next(fd, iov, iovcnt, offset);
-}
+FORWARD(ssize_t, pwritev64,
+        (int fd, const struct iovec *iov, int iovcnt, off64_t offset),
+        (fd, iov, iovcnt, offset), -1)

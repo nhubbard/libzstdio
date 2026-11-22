@@ -1,4 +1,4 @@
-#include "resolve.h"
+#include "forward.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -14,18 +14,6 @@ extern int __open_2(const char *, int);
 extern int __open64_2(const char *, int);
 extern ssize_t __read_chk(int, void *, size_t, size_t);
 extern size_t __fread_chk(void *, size_t, size_t, size_t, FILE *);
-
-#define FORWARD(type, name, parameters, arguments, failure)                    \
-  static _Atomic(void *) name##_symbol;                                        \
-  type name parameters {                                                       \
-    __extension__ __typeof__(&name) const next =                               \
-        (__typeof__(&name))zstdio_resolve_next(&name##_symbol, #name);         \
-    if (next == NULL) {                                                        \
-      errno = ENOSYS;                                                          \
-      return failure;                                                          \
-    }                                                                          \
-    return next arguments;                                                     \
-  }
 
 FORWARD(int, rename, (const char *old_path, const char *new_path),
         (old_path, new_path), -1)
@@ -67,8 +55,6 @@ FORWARD(int, statvfs64, (const char *path, struct statvfs64 *info),
 FORWARD(int, execve, (const char *path, char *const argv[], char *const envp[]),
         (path, argv, envp), -1)
 FORWARD(int, execvp, (const char *file, char *const argv[]), (file, argv), -1)
-
-#undef FORWARD
 
 #ifdef ZSTDIO_X86_64_VARIADIC
 
