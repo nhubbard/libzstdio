@@ -72,6 +72,23 @@ if(BUILD_TESTING)
             "LD_PRELOAD=$<TARGET_FILE:zstdio>"
             $<TARGET_FILE:zstdio_openat_probe>
     )
+
+    find_package(Threads REQUIRED)
+	add_executable(zstdio_descriptor_race tests/descriptor_race.c)
+	target_link_libraries(zstdio_descriptor_race PRIVATE Threads::Threads)
+
+	add_test(NAME descriptor_race_native COMMAND zstdio_descriptor_race)
+	add_test(
+		NAME descriptor_race_preload
+		COMMAND
+			${CMAKE_COMMAND} -E env
+			"LD_PRELOAD=$<TARGET_FILE:zstdio>"
+			$<TARGET_FILE:zstdio_descriptor_race>
+	)
+	set_tests_properties(
+		descriptor_race_native descriptor_race_preload
+		PROPERTIES TIMEOUT 10
+	)
 endif()
 
 option(
