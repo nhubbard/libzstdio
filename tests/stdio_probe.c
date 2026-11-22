@@ -32,6 +32,22 @@ int main(void) {
     goto cleanup;
   }
 
+  if (fflush(stream) != 0) {
+    perror("fflush writer");
+    goto cleanup;
+  }
+
+  if (pread(fd, actual, sizeof(expected), 0) != (ssize_t)sizeof(expected) ||
+      memcmp(actual, expected, sizeof(expected)) != 0) {
+    fputs("fflush: expected matching bytes before fclose\n", stderr);
+    goto cleanup;
+  }
+
+  if (fflush(NULL) != 0) {
+    perror("fflush all streams");
+    goto cleanup;
+  }
+
   const int close_result = fclose(stream);
   stream = NULL;
   if (close_result != 0) {

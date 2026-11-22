@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -12,12 +13,14 @@ typedef ssize_t (*write_fn)(int, const void *, size_t);
 typedef int (*close_fn)(int);
 typedef off_t (*lseek_fn)(int, off_t, int);
 typedef off64_t (*lseek64_fn)(int, off64_t, int);
+typedef int (*fflush_fn)(FILE *);
 
 static _Atomic(void *) read_symbol;
 static _Atomic(void *) write_symbol;
 static _Atomic(void *) close_symbol;
 static _Atomic(void *) lseek_symbol;
 static _Atomic(void *) lseek64_symbol;
+static _Atomic(void *) fflush_symbol;
 
 // One guard covers reentry into any of these wrappers during lookup.
 static _Thread_local int resolving;
@@ -111,4 +114,14 @@ off64_t lseek64(int fd, off64_t offset, int whence) {
     return (off64_t)-1;
   }
   return next(fd, offset, whence);
+}
+
+int fflush(FILE *stream) {
+  __extension__ const fflush_fn next =
+      (fflush_fn)zstdio_resolve_next(&fflush_symbol, "fflush");
+  if (next == NULL) {
+    errno = ENOSYS;
+    return EOF;
+  }
+  return next(stream);
 }
