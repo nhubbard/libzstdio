@@ -63,15 +63,6 @@ int main(void) {
   if (fd != -1 || errno != EEXIST) {
     fputs("openat: expected EEXIST for exclusive creation\n", stderr);
     goto cleanup;
-    if (fd >= 0 && close(fd) != 0)
-      status = EXIT_FAILURE;
-    if (created && unlinkat(dirfd, name, 0) != 0)
-      status = EXIT_FAILURE;
-    if (dirfd >= 0 && close(dirfd) != 0)
-      status = EXIT_FAILURE;
-    if (rmdir(directory) != 0)
-      status = EXIT_FAILURE;
-    return status;
   }
 
   fd = openat(dirfd, name, O_RDONLY);
